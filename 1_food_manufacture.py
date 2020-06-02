@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+import logging
+# from pyomo.core import Piecewise
+from os import name as osname, path
+
 from pyomo import environ as pe
-from pyomo.core import Piecewise
+
 oils = ['1', '2', '3', '4', '5']
 
 model = pe.ConcreteModel()
@@ -329,3 +333,14 @@ for oid in oils:
 # s5c + b5d − u5d − s5d = 0
 # s5d + b5e − u5e − s5e = 0
 # s5e + b5f − u5f = 500
+from . import exepath
+solver = pe.SolverFactory('scip6', executable=exepath, solver_io='nl')
+if not path.isfile(exepath):
+    logging.error('Error in path to solver file.')
+if osname == 'nt':
+    logging.error('cannot run solver in windows.')
+    # raise SystemExit
+    pass
+logging.info('starting solver...')
+results = solver.solve(model, keepfiles=True, tee=False,
+                       report_timing=False, load_solutions=False)
