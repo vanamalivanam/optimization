@@ -387,8 +387,7 @@ def print_vars_debug(m, vartype=pe.Constraint, c1='$', c2='%'):
 
 if len(results.solution) > 0:
     model.solutions.load_from(results)
-
-print('objective value: %d' % model.objective())
+    print('objective value: %d' % model.objective())
 
 logging_level = 20
 if logging_level == 10:
@@ -399,6 +398,28 @@ if logging_level == 10:
     model.display()
     # Qtyvar = getattr(model, 'Qtyvar')
 print('printing results')
-print('_'*20)
+print('='*20)
 print(results)
-print('_'*20)
+print('='*20)
+
+log_fpath = solver._log_file
+print('log file path: %s'%log_fpath)
+
+logging.info('finished running solver...')
+print('results.solver.message: %s'%results.solver.message)
+
+# read the log file created by solver and look for text '<_scon[' to find the failed constr.
+# this logic is specific to scip solver's log.
+f = open(log_fpath, 'r')
+lines = f.read()
+pos1 = lines.find('<_scon[')
+pos2 = lines.find(']', pos1)
+# infeasible constraint:   [linear] <_scon[49]>: <_svar[1]>[C] (+0) -<_svar[6]>[C] (+0) -<_svar[11]>[C] (+0) == -500;
+try:
+    # result_dict['failed_constr_num'] = int(lines[pos1 + 7: pos2])
+    print('@'*20)
+    print (lines)
+    print('@'*30)
+except ValueError as e:
+    logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
+    pass
