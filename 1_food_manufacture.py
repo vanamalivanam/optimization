@@ -39,6 +39,29 @@ for mon in ['jan', 'feb', 'march', 'april', 'may', 'june']:
         cname = qty + '_' + mon
         setattr(model, cname, pe.Var(oils, within=pe.NonNegativeReals, initialize=0))
 
+
+# In any month, it is not possible to refine more than 200 tons of vegetable
+# oils and more than 250 tons of non-vegetable oils.
+vegoils = ['1','2']
+nvegoils = ['3','4','5']
+for mon in ['jan', 'feb', 'march', 'april', 'may', 'june']:
+    for oid in vegoils:
+        cname = oid + '_refinelimit_constr_'
+        setattr(model, cname+'a', pe.Constraint(expr=model.use_qty_jan[oid] <=200))
+        setattr(model, cname+'b', pe.Constraint(expr=model.use_qty_feb[oid] <=200))
+        setattr(model, cname+'c', pe.Constraint(expr=model.use_qty_march[oid] <=200))
+        setattr(model, cname+'d', pe.Constraint(expr=model.use_qty_april[oid] <=200))
+        setattr(model, cname+'e', pe.Constraint(expr=model.use_qty_may[oid] <=200))
+        setattr(model, cname+'f', pe.Constraint(expr=model.use_qty_june[oid] <=200))
+    for oid in nvegoils:
+        cname = oid + '_refinelimit_constr_'
+        setattr(model, cname+'a', pe.Constraint(expr=model.use_qty_jan[oid] <=250))
+        setattr(model, cname+'b', pe.Constraint(expr=model.use_qty_feb[oid] <=250))
+        setattr(model, cname+'c', pe.Constraint(expr=model.use_qty_march[oid] <=250))
+        setattr(model, cname+'d', pe.Constraint(expr=model.use_qty_april[oid] <=250))
+        setattr(model, cname+'e', pe.Constraint(expr=model.use_qty_may[oid] <=250))
+        setattr(model, cname+'f', pe.Constraint(expr=model.use_qty_june[oid] <=250))
+
 # quantity of product generated.
 model.ya = pe.Var(within=pe.NonNegativeReals, initialize=0)
 model.yb = pe.Var(within=pe.NonNegativeReals, initialize=0)
@@ -53,9 +76,6 @@ futures_march = [110, 140, 130, 100, 95]
 futures_april = [120, 110, 120, 120, 125]
 futures_may = [110, 120, 150, 110, 105]
 futures_june = [90, 100, 140, 80, 135]
-
-# oil densities
-densities = {'1': 8.8, '2': 6.1, '3': 2, '4': 4.2, '5': 5}
 
 # JAN
 #######
@@ -83,7 +103,6 @@ model.pe = pe.Expression(expr=150 * model.ye - sum(futures_may[enm] * model.buy_
 model.pf = pe.Expression(expr=150 * model.yf - sum(futures_june[enm] * model.buy_qty_june[oid]
                                 for enm, oid in enumerate(oils)) - 5 * sum(model.store_qty_june[oid] for oid in oils))
 
-
 def objective_expr(model):
     expr = model.pa + model.pb + model.pc + model.pd + model.pe + model.pf
     return expr
@@ -92,30 +111,36 @@ def objective_expr(model):
 model.objective = pe.Objective(rule=objective_expr, sense=pe.maximize)
 # model.objective_expr = pe.Expression(rule=generic_objective)
 
+
+# There is a technological restriction of hardness on the final product. In the
+# units in which hardness is measured, this must lie between 3 and 6
 # hardness upper and lower bound
 # Ha = 8.8*u1a + 6.1*u2a + 2*u3a + 4.2*u4a + 5*u5a
 # 3*ya <= Ha <= 6*ya
-model.Ha = sum(densities[oid] * model.use_qty_jan[oid] for oid in oils)
+
+# oil densities
+densities = {'1': 8.8, '2': 6.1, '3': 2, '4': 4.2, '5': 5}
+model.Ha = pe.Expression(expr=sum(densities[oid] * model.use_qty_jan[oid] for oid in oils))
 model.hardnes_jan_low = pe.Constraint(expr=3 * model.ya <= model.Ha)
 model.hardnes_jan_high = pe.Constraint(expr=model.Ha <= 6 * model.ya)
 
-model.Hb=sum(densities[oid] * model.use_qty_feb[oid] for oid in oils)
+model.Hb = pe.Expression(expr=sum(densities[oid] * model.use_qty_feb[oid] for oid in oils))
 model.hardnes_feb_low =pe.Constraint(expr = 3 * model.yb <= model.Hb)
 model.hardnes_feb_high = pe.Constraint(expr = model.Hb <= 6 * model.yb)
 
-model.Hc=sum(densities[oid] * model.use_qty_march[oid] for oid in oils)
+model.Hc = pe.Expression(expr=sum(densities[oid] * model.use_qty_march[oid] for oid in oils))
 model.hardnes_march_low = pe.Constraint(expr=3*model.yc <= model.Hc)
 model.hardnes_march_high = pe.Constraint(expr=model.Hc <= 6 * model.yc)
 
-model.Hd=sum(densities[oid] * model.use_qty_april[oid] for oid in oils)
+model.Hd = pe.Expression(expr=sum(densities[oid] * model.use_qty_april[oid] for oid in oils))
 model.hardnes_april_low = pe.Constraint(expr=3*model.yd <= model.Hd)
 model.hardnes_april_high = pe.Constraint(expr=model.Hd <= 6 * model.yd)
 
-model.He=sum(densities[oid] * model.use_qty_may[oid] for oid in oils)
+model.He = pe.Expression(expr=sum(densities[oid] * model.use_qty_may[oid] for oid in oils))
 model.hardnes_may_low = pe.Constraint(expr=3 * model.ye <= model.He)
 model.hardnes_may_high = pe.Constraint(expr=model.He <= 6 * model.ye)
 
-model.Hf=sum(densities[oid] * model.use_qty_june[oid] for oid in oils)
+model.Hf = pe.Expression(expr=sum(densities[oid] * model.use_qty_june[oid] for oid in oils))
 model.hardnes_june_low = pe.Constraint(expr=3 * model.yf <= model.Hf)
 model.hardnes_june_high = pe.Constraint(expr=model.Hf <= 6 * model.yf)
 
@@ -125,6 +150,9 @@ model.hardnes_june_high = pe.Constraint(expr=model.Hf <= 6 * model.yf)
 # s3a <= 1000
 # s4a <= 1000
 # s5a <= 1000
+
+# It is possible to store up to 1000 tons of each raw oil for use later. The cost
+# of storage for vegetable and non-vegetable oil is £5 per ton per month.
 for oid in oils:
     cname='storage_jan_' + oid
     setattr(model, cname, pe.Constraint(expr=model.store_qty_jan[oid] <= 1000))
@@ -152,7 +180,6 @@ model.vol_march_constr=pe.Constraint(expr=sum(model.use_qty_march[oid] for oid i
 model.vol_april_constr=pe.Constraint(expr=sum(model.use_qty_april[oid] for oid in oils) - model.yd == 0)
 model.vol_may_constr=pe.Constraint(expr=sum(model.use_qty_may[oid] for oid in oils) - model.ye == 0)
 model.vol_june_constr=pe.Constraint(expr=sum(model.use_qty_june[oid] for oid in oils) - model.yf == 0)
-
 
 # FEB
 #######
@@ -292,7 +319,6 @@ model.vol_june_constr=pe.Constraint(expr=sum(model.use_qty_june[oid] for oid in 
 # let pa, pb, pc, pd, pe, pf be the profits earned for each month.
 # total_profit =  pa + pb + pc + pd + pe + pf
 
-
 """
 # from explanation in the book.
 BVEG 11 − UVEG 11 − SVEG 11 = −500,
@@ -314,7 +340,6 @@ SVEG 15 + BVEG 16 − UVEG 16 = 500
 # s1c + b1d = u1d + s1d
 # s1d + b1e = u1e + s1e
 # s1e + b1f = u1f + 500
-
 for oid in oils:
     cname = 'oil_%s_balance_constr_'%oid
     setattr(model, cname+'p', pe.Constraint(expr=model.buy_qty_jan[oid] + 500 == model.use_qty_jan[oid] + model.store_qty_jan[oid] ))
