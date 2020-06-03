@@ -1,9 +1,25 @@
 #!/usr/bin/env python
 import logging
+import sys
 # from pyomo.core import Piecewise
-from os import name as osname, path
+from os import name as osname, path, sep
 
 from pyomo import environ as pe
+
+modpath = path.abspath(__file__)
+dir_path = path.dirname(modpath)
+sys.path.append(dir_path)
+initpathlist = path.realpath(__file__).split(sep)
+
+PROJ_PATH = sep.join(initpathlist[:-1])
+EXP = initpathlist[-2]
+
+DATA_PATH = sep.join(initpathlist[:-1] + ['data'])
+SOLVERS_PATH = sep.join(initpathlist[:-1] + ['solvers'])
+print(SOLVERS_PATH)
+print(DATA_PATH)
+exepath = path.join(SOLVERS_PATH, 'scipampl601')
+print(exepath)
 
 oils = ['1', '2', '3', '4', '5']
 
@@ -21,15 +37,15 @@ model.store_qty = pe.Var(oils, initialize=_qtyinit, bounds=_qbounds,
 for mon in ['jan', 'feb', 'march', 'april', 'may', 'june']:
     for qty in ['buy_qty', 'use_qty', 'store_qty']:
         cname = qty + '_' + mon
-        setattr(model, cname, pe.Var(oils, within=pe.NonNegativeReals))
+        setattr(model, cname, pe.Var(oils, within=pe.NonNegativeReals, initialize=0))
 
 # quantity of product generated.
-model.ya = pe.Var(within=pe.NonNegativeReals)
-model.yb = pe.Var(within=pe.NonNegativeReals)
-model.yc = pe.Var(within=pe.NonNegativeReals)
-model.yd = pe.Var(within=pe.NonNegativeReals)
-model.ye = pe.Var(within=pe.NonNegativeReals)
-model.yf = pe.Var(within=pe.NonNegativeReals)
+model.ya = pe.Var(within=pe.NonNegativeReals, initialize=0)
+model.yb = pe.Var(within=pe.NonNegativeReals, initialize=0)
+model.yc = pe.Var(within=pe.NonNegativeReals, initialize=0)
+model.yd = pe.Var(within=pe.NonNegativeReals, initialize=0)
+model.ye = pe.Var(within=pe.NonNegativeReals, initialize=0)
+model.yf = pe.Var(within=pe.NonNegativeReals, initialize=0)
 # purchase cost of each month for oil1, oil2, oil3, oil4, oil5
 futures_jan = [110, 120, 130, 110, 115]
 futures_feb = [130, 130, 110, 90, 115]
@@ -54,18 +70,18 @@ densities = {'1': 8.8, '2': 6.1, '3': 2, '4': 4.2, '5': 5}
 # profit for jan
 # ['buy_qty', 'use_qty', 'store_qty']
 # pa = −110*b1a − 120*b2a − 130*b3a − 110*b4a − 115*b5a + 150*ya - 5*(s1a+s2a+s3a+s4a+s5a)
-model.pa = 150 * model.ya - sum(futures_jan[enm] * model.buy_qty_jan[oid]
-                                for enm, oid in enumerate(oils)) - 5 * model.store_qty_jan
-model.pb = 150 * model.yb - sum(futures_feb[enm] * model.buy_qty_feb[oid]
-                                for enm, oid in enumerate(oils)) - 5 * model.store_qty_feb
-model.pc = 150 * model.yc - sum(futures_march[enm] * model.buy_qty_march[oid]
-                                for enm, oid in enumerate(oils)) - 5 * model.store_qty_march
-model.pd = 150 * model.yd - sum(futures_april[enm] * model.buy_qty_april[oid]
-                                for enm, oid in enumerate(oils)) - 5 * model.store_qty_april
-model.pe = 150 * model.ye - sum(futures_may[enm] * model.buy_qty_may[oid]
-                                for enm, oid in enumerate(oils)) - 5 * model.store_qty_may
-model.pf = 150 * model.yf - sum(futures_june[enm] * model.buy_qty_june[oid]
-                                for enm, oid in enumerate(oils)) - 5 * model.store_qty_june
+model.pa = pe.Expression(expr=150 * model.ya - sum(futures_jan[enm] * model.buy_qty_jan[oid]
+                                for enm, oid in enumerate(oils)) - 5 * sum(model.store_qty_jan[oid] for oid in oils))
+model.pb = pe.Expression(expr=150 * model.yb - sum(futures_feb[enm] * model.buy_qty_feb[oid]
+                                for enm, oid in enumerate(oils)) - 5 * sum(model.store_qty_feb[oid] for oid in oils))
+model.pc = pe.Expression(expr=150 * model.yc - sum(futures_march[enm] * model.buy_qty_march[oid]
+                                for enm, oid in enumerate(oils)) - 5 * sum(model.store_qty_march[oid] for oid in oils))
+model.pd = pe.Expression(expr=150 * model.yd - sum(futures_april[enm] * model.buy_qty_april[oid]
+                                for enm, oid in enumerate(oils)) - 5 * sum(model.store_qty_april[oid] for oid in oils))
+model.pe = pe.Expression(expr=150 * model.ye - sum(futures_may[enm] * model.buy_qty_may[oid]
+                                for enm, oid in enumerate(oils)) - 5 * sum(model.store_qty_may[oid] for oid in oils))
+model.pf = pe.Expression(expr=150 * model.yf - sum(futures_june[enm] * model.buy_qty_june[oid]
+                                for enm, oid in enumerate(oils)) - 5 * sum(model.store_qty_june[oid] for oid in oils))
 
 
 def objective_expr(model):
@@ -79,23 +95,29 @@ model.objective = pe.Objective(rule=objective_expr, sense=pe.maximize)
 # hardness upper and lower bound
 # Ha = 8.8*u1a + 6.1*u2a + 2*u3a + 4.2*u4a + 5*u5a
 # 3*ya <= Ha <= 6*ya
-model.Ha = sum(densities[oid] * model.usage_qty_jan[oid] for oid in oils)
-model.hardnes_jan = pe.Constraint(expr=3 * model.ya <= model.Ha <= 6 * model.ya)
+model.Ha = sum(densities[oid] * model.use_qty_jan[oid] for oid in oils)
+model.hardnes_jan_low = pe.Constraint(expr=3 * model.ya <= model.Ha)
+model.hardnes_jan_high = pe.Constraint(expr=model.Ha <= 6 * model.ya)
 
-model.Hb=sum(densities[oid] * model.usage_qty_feb[oid] for oid in oils)
-model.hardnes_feb=pe.Constraint(expr = 3 * model.yb <= model.Hb <= 6 * model.yb)
+model.Hb=sum(densities[oid] * model.use_qty_feb[oid] for oid in oils)
+model.hardnes_feb_low =pe.Constraint(expr = 3 * model.yb <= model.Hb)
+model.hardnes_feb_high = pe.Constraint(expr = model.Hb <= 6 * model.yb)
 
-model.Hc=sum(densities[oid] * model.usage_qty_march[oid] for oid in oils)
-model.hardnes_march=pe.Constraint(expr=3 * model.yc <= model.Hc <= 6 * model.yc)
+model.Hc=sum(densities[oid] * model.use_qty_march[oid] for oid in oils)
+model.hardnes_march_low = pe.Constraint(expr=3*model.yc <= model.Hc)
+model.hardnes_march_high = pe.Constraint(expr=model.Hc <= 6 * model.yc)
 
-model.Hd=sum(densities[oid] * model.usage_qty_april[oid] for oid in oils)
-model.hardnes_april=pe.Constraint(expr=3 * model.yd <= model.Hd <= 6 * model.yd)
+model.Hd=sum(densities[oid] * model.use_qty_april[oid] for oid in oils)
+model.hardnes_april_low = pe.Constraint(expr=3*model.yd <= model.Hd)
+model.hardnes_april_high = pe.Constraint(expr=model.Hd <= 6 * model.yd)
 
-model.He=sum(densities[oid] * model.usage_qty_may[oid] for oid in oils)
-model.hardnes_may=pe.Constraint(expr=3 * model.ye <= model.He <= 6 * model.ye)
+model.He=sum(densities[oid] * model.use_qty_may[oid] for oid in oils)
+model.hardnes_may_low = pe.Constraint(expr=3 * model.ye <= model.He)
+model.hardnes_may_high = pe.Constraint(expr=model.He <= 6 * model.ye)
 
-model.Hf=sum(densities[oid] * model.usage_qty_june[oid] for oid in oils)
-model.hardnes_june=pe.Constraint(expr=3 * model.yf <= model.Hf <= 6 * model.yf)
+model.Hf=sum(densities[oid] * model.use_qty_june[oid] for oid in oils)
+model.hardnes_june_low = pe.Constraint(expr=3 * model.yf <= model.Hf)
+model.hardnes_june_high = pe.Constraint(expr=model.Hf <= 6 * model.yf)
 
 # storage limit of 1000 tonnes
 # s1a <= 1000
@@ -333,7 +355,7 @@ for oid in oils:
 # s5c + b5d − u5d − s5d = 0
 # s5d + b5e − u5e − s5e = 0
 # s5e + b5f − u5f = 500
-from . import exepath
+
 solver = pe.SolverFactory('scip6', executable=exepath, solver_io='nl')
 if not path.isfile(exepath):
     logging.error('Error in path to solver file.')
@@ -344,3 +366,39 @@ if osname == 'nt':
 logging.info('starting solver...')
 results = solver.solve(model, keepfiles=True, tee=False,
                        report_timing=False, load_solutions=False)
+print('solver message:%s'%results.solver.message)
+print('term_cond: %s'%results.solver.termination_condition.__str__())
+print('solver_status: %s'%results.solver.status.__str__())
+
+
+def print_vars_debug(m, vartype=pe.Constraint, c1='$', c2='%'):
+    # Displays constraints upper bound lower bound and expression.
+    # m.display()
+    # debugging: constraints defined in the model.
+    # logging.debug(peobj.model.display())
+    s1 = c1 * 80
+    s2 = c2 * 80
+    for con in m.component_map(vartype).itervalues():
+        # for con in m.component_map(vartype).itervalues():
+        print(s1)
+        con.pprint()
+        print(s2)
+
+
+if len(results.solution) > 0:
+    model.solutions.load_from(results)
+
+print('objective value: %d' % model.objective())
+
+logging_level = 20
+if logging_level == 10:
+    from pyomo import environ as pe
+    print_vars_debug(model, pe.Constraint, '^', '#')
+    print_vars_debug(model, pe.Var, '&', '+')
+    print(80 * '&')
+    model.display()
+    # Qtyvar = getattr(model, 'Qtyvar')
+print('printing results')
+print('_'*20)
+print(results)
+print('_'*20)
