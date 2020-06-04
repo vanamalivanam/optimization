@@ -1,10 +1,28 @@
 #!/usr/bin/env python
+logging_level = 10
+
 import logging
 import sys
-# from pyomo.core import Piecewise
+from inspect import stack
 from os import name as osname, path, sep
 
+# from pyomo.core import Piecewise
 from pyomo import environ as pe
+from pyomo.version.info import version_info as pyomoversion
+
+def check_expr(exprarg):
+    # supports Pyomo 5.6.5
+    # pyomo >= 5.6: is_expression_type(); pyomo <=5.5: is_expression()
+    if pyomoversion[1] >= 6:
+        if exprarg.is_expression_type():
+            return True
+    elif pyomoversion[1] == 5:
+        if exprarg.is_expression():
+            return True
+    logging.warning('No expression returned by expr_method: %s called by the parent %s' %
+                    (stack()[0][3], stack()[1][3]))
+    return False
+
 
 modpath = path.abspath(__file__)
 dir_path = path.dirname(modpath)
@@ -14,10 +32,9 @@ initpathlist = path.realpath(__file__).split(sep)
 PROJ_PATH = sep.join(initpathlist[:-1])
 EXP = initpathlist[-2]
 
-DATA_PATH = sep.join(initpathlist[:-1] + ['data'])
+# DATA_PATH = sep.join(initpathlist[:-1] + ['data'])
 SOLVERS_PATH = sep.join(initpathlist[:-1] + ['solvers'])
 print(SOLVERS_PATH)
-print(DATA_PATH)
 exepath = path.join(SOLVERS_PATH, 'scipampl601')
 print(exepath)
 
@@ -44,23 +61,22 @@ for mon in ['jan', 'feb', 'march', 'april', 'may', 'june']:
 # oils and more than 250 tons of non-vegetable oils.
 vegoils = ['1','2']
 nvegoils = ['3','4','5']
-for mon in ['jan', 'feb', 'march', 'april', 'may', 'june']:
-    for oid in vegoils:
-        cname = oid + '_refinelimit_constr_'
-        setattr(model, cname+'a', pe.Constraint(expr=model.use_qty_jan[oid] <=200))
-        setattr(model, cname+'b', pe.Constraint(expr=model.use_qty_feb[oid] <=200))
-        setattr(model, cname+'c', pe.Constraint(expr=model.use_qty_march[oid] <=200))
-        setattr(model, cname+'d', pe.Constraint(expr=model.use_qty_april[oid] <=200))
-        setattr(model, cname+'e', pe.Constraint(expr=model.use_qty_may[oid] <=200))
-        setattr(model, cname+'f', pe.Constraint(expr=model.use_qty_june[oid] <=200))
-    for oid in nvegoils:
-        cname = oid + '_refinelimit_constr_'
-        setattr(model, cname+'a', pe.Constraint(expr=model.use_qty_jan[oid] <=250))
-        setattr(model, cname+'b', pe.Constraint(expr=model.use_qty_feb[oid] <=250))
-        setattr(model, cname+'c', pe.Constraint(expr=model.use_qty_march[oid] <=250))
-        setattr(model, cname+'d', pe.Constraint(expr=model.use_qty_april[oid] <=250))
-        setattr(model, cname+'e', pe.Constraint(expr=model.use_qty_may[oid] <=250))
-        setattr(model, cname+'f', pe.Constraint(expr=model.use_qty_june[oid] <=250))
+
+cname1 = 'vegoil_refinelimit_constr_'
+setattr(model, cname1+'a', pe.Constraint(expr=sum(model.use_qty_jan[oid] for oid in vegoils) <=200))
+setattr(model, cname1+'b', pe.Constraint(expr=sum(model.use_qty_feb[oid] for oid in vegoils) <=200))
+setattr(model, cname1+'c', pe.Constraint(expr=sum(model.use_qty_march[oid] for oid in vegoils) <=200))
+setattr(model, cname1+'d', pe.Constraint(expr=sum(model.use_qty_april[oid] for oid in vegoils) <=200))
+setattr(model, cname1+'e', pe.Constraint(expr=sum(model.use_qty_may[oid] for oid in vegoils) <=200))
+setattr(model, cname1+'f', pe.Constraint(expr=sum(model.use_qty_june[oid] for oid in vegoils) <=200))
+
+cname2 = 'nonvegoil_refinelimit_constr_'
+setattr(model, cname2+'a', pe.Constraint(expr=sum(model.use_qty_jan[oid] for oid in nvegoils) <=250))
+setattr(model, cname2+'b', pe.Constraint(expr=sum(model.use_qty_feb[oid] for oid in nvegoils) <=250))
+setattr(model, cname2+'c', pe.Constraint(expr=sum(model.use_qty_march[oid] for oid in nvegoils) <=250))
+setattr(model, cname2+'d', pe.Constraint(expr=sum(model.use_qty_april[oid] for oid in nvegoils) <=250))
+setattr(model, cname2+'e', pe.Constraint(expr=sum(model.use_qty_may[oid] for oid in nvegoils) <=250))
+setattr(model, cname2+'f', pe.Constraint(expr=sum(model.use_qty_june[oid] for oid in nvegoils) <=250))
 
 # quantity of product generated.
 model.ya = pe.Var(within=pe.NonNegativeReals, initialize=0)
@@ -69,12 +85,13 @@ model.yc = pe.Var(within=pe.NonNegativeReals, initialize=0)
 model.yd = pe.Var(within=pe.NonNegativeReals, initialize=0)
 model.ye = pe.Var(within=pe.NonNegativeReals, initialize=0)
 model.yf = pe.Var(within=pe.NonNegativeReals, initialize=0)
+
 # purchase cost of each month for oil1, oil2, oil3, oil4, oil5
 futures_jan = [110, 120, 130, 110, 115]
 futures_feb = [130, 130, 110, 90, 115]
 futures_march = [110, 140, 130, 100, 95]
 futures_april = [120, 110, 120, 120, 125]
-futures_may = [110, 120, 150, 110, 105]
+futures_may = [100, 120, 150, 110, 105]
 futures_june = [90, 100, 140, 80, 135]
 
 # JAN
@@ -412,9 +429,9 @@ def print_vars_debug(m, vartype=pe.Constraint, c1='$', c2='%'):
 
 if len(results.solution) > 0:
     model.solutions.load_from(results)
-    print('objective value: %d' % model.objective())
+print('objective value: %d' % model.objective())
 
-logging_level = 20
+
 if logging_level == 10:
     from pyomo import environ as pe
     print_vars_debug(model, pe.Constraint, '^', '#')
@@ -422,29 +439,33 @@ if logging_level == 10:
     print(80 * '&')
     model.display()
     # Qtyvar = getattr(model, 'Qtyvar')
-print('printing results')
-print('='*20)
-print(results)
-print('='*20)
+    print('printing results')
+    print('='*20)
+    print(results)
+    print('='*20)
 
-log_fpath = solver._log_file
-print('log file path: %s'%log_fpath)
+    log_fpath = solver._log_file
+    print('log file path: %s'%log_fpath)
 
-logging.info('finished running solver...')
-print('results.solver.message: %s'%results.solver.message)
+    logging.info('finished running solver...')
+    print('results.solver.message: %s'%results.solver.message)
+    # read the log file created by solver and look for text '<_scon[' to find the failed constr.
+    # this logic is specific to scip solver's log.
+    f = open(log_fpath, 'r')
+    lines = f.read()
+    pos1 = lines.find('<_scon[')
+    pos2 = lines.find(']', pos1)
+    # infeasible constraint:   [linear] <_scon[49]>: <_svar[1]>[C] (+0) -<_svar[6]>[C] (+0) -<_svar[11]>[C] (+0) == -500;
+    try:
+        # result_dict['failed_constr_num'] = int(lines[pos1 + 7: pos2])
+        print('@'*20)
+        print (lines)
+        print('@'*30)
+    except ValueError as e:
+        logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
+        pass
 
-# read the log file created by solver and look for text '<_scon[' to find the failed constr.
-# this logic is specific to scip solver's log.
-f = open(log_fpath, 'r')
-lines = f.read()
-pos1 = lines.find('<_scon[')
-pos2 = lines.find(']', pos1)
-# infeasible constraint:   [linear] <_scon[49]>: <_svar[1]>[C] (+0) -<_svar[6]>[C] (+0) -<_svar[11]>[C] (+0) == -500;
-try:
-    # result_dict['failed_constr_num'] = int(lines[pos1 + 7: pos2])
-    print('@'*20)
-    print (lines)
-    print('@'*30)
-except ValueError as e:
-    logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
-    pass
+
+# correct answer: 107843
+# current answer: 904250
+# objective value: 405000 # when removing the "constraint set 5"
