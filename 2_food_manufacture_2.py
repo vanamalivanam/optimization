@@ -1,3 +1,4 @@
+# 12.2 Food manufacture 2
 #!/usr/bin/env python
 logging_level = 20
 
@@ -6,7 +7,7 @@ import sys
 from inspect import stack
 from os import name as osname, path, sep
 
-# from pyomo.core import Piecewise
+from pyomo.core import Piecewise
 from pyomo import environ as pe
 from pyomo.version.info import version_info as pyomoversion
 
@@ -22,6 +23,7 @@ def check_expr(exprarg):
     logging.warning('No expression returned by expr_method: %s called by the parent %s' %
                     (stack()[0][3], stack()[1][3]))
     return False
+
 
 def print_vars_debug(m, vartype=pe.Constraint, c1='$', c2='%'):
     # Displays constraints upper bound lower bound and expression.
@@ -222,6 +224,77 @@ for oid in oils:
     setattr(model, cname+'may', pe.Constraint(expr=model.storeq_april[oid] + model.buyq_may[oid] == model.useq_may[oid] + model.storeq_may[oid]))
     setattr(model, cname+'june', pe.Constraint(expr=model.storeq_may[oid] + model.buyq_june[oid] == model.useq_june[oid] + 500))
 
+#######################################################################################################################
+#######################################################################################################################
+
+# problem 2:
+"""It is wished to impose the following extra conditions on the food manufacture problem:
+1. The food may never be made up of more than three oils in any month."""
+# this constraint can be achieved by creating boolean variables for used oils for each month,
+# and sum of these boolean variables cannot be more than three for every month
+
+boolkeys = []
+for mon in ['jan', 'feb', 'march', 'april', 'may', 'june']:
+    cname = 'bool_'+'useq'+ '_' + mon
+    setattr(model, cname, pe.Var(oils, within=pe.Binary, initialize=0))
+
+# BID BOOLEAN CONSTRAINT
+# model.bididSet = pe.Set(initialize=self.bidids)
+
+DOMAIN_PTS = [0, 0.9, 0.9, 100000 + 100]
+RANGE_PTS = [0, 0, 1, 1]
+
+model.useq_bool_jan_constr = Piecewise(oils, model.bool_useq_jan, model.useq_jan,
+                                       pw_pts=DOMAIN_PTS, pw_repn='INC',
+                                       pw_constr_type='EQ', f_rule=RANGE_PTS,
+                                       unbounded_domain_var=True)
+
+model.useq_bool_feb_constr = Piecewise(oils, model.bool_useq_feb, model.useq_feb,
+                                       pw_pts=DOMAIN_PTS, pw_repn='INC',
+                                       pw_constr_type='EQ', f_rule=RANGE_PTS,
+                                       unbounded_domain_var=True)
+
+model.useq_bool_march_constr = Piecewise(oils, model.bool_useq_march, model.useq_march,
+                                       pw_pts=DOMAIN_PTS, pw_repn='INC',
+                                       pw_constr_type='EQ', f_rule=RANGE_PTS,
+                                       unbounded_domain_var=True)
+
+model.useq_bool_april_constr = Piecewise(oils, model.bool_useq_april, model.useq_april,
+                                       pw_pts=DOMAIN_PTS, pw_repn='INC',
+                                       pw_constr_type='EQ', f_rule=RANGE_PTS,
+                                       unbounded_domain_var=True)
+
+model.useq_bool_may_constr = Piecewise(oils, model.bool_useq_may, model.useq_may,
+                                       pw_pts=DOMAIN_PTS, pw_repn='INC',
+                                       pw_constr_type='EQ', f_rule=RANGE_PTS,
+                                       unbounded_domain_var=True)
+
+model.useq_bool_june_constr = Piecewise(oils, model.bool_useq_june, model.useq_june,
+                                       pw_pts=DOMAIN_PTS, pw_repn='INC',
+                                       pw_constr_type='EQ', f_rule=RANGE_PTS,
+                                       unbounded_domain_var=True)
+
+model.only_3oils_jan_constr = pe.Constraint(expr=sum(model.bool_useq_jan[oid] for oid in oils) <= 3)
+model.only_3oils_feb_constr = pe.Constraint(expr=sum(model.bool_useq_feb[oid] for oid in oils) <= 3)
+model.only_3oils_march_constr = pe.Constraint(expr=sum(model.bool_useq_march[oid] for oid in oils) <= 3)
+model.only_3oils_april_constr = pe.Constraint(expr=sum(model.bool_useq_april[oid] for oid in oils) <=3)
+model.only_3oils_may_constr = pe.Constraint(expr=sum(model.bool_useq_may[oid] for oid in oils) <= 3)
+model.only_3oils_june_constr = pe.Constraint(expr=sum(model.bool_useq_june[oid] for oid in oils) <= 3)
+
+
+"""2. If an oil is used in a month, at least 20 tons must be used."""
+# This constraint can be achieved by a=>b type constraint;
+
+
+
+
+"""3. If either of VEG 1 or VEG 2 are used in a month then OIL 3 must also be used."""
+# oil1 => oil3 and oil2 => oil3
+
+
+
+
+# solve the optimization problem
 solver = pe.SolverFactory('scip6', executable=exepath, solver_io='nl')
 if not path.isfile(exepath):
     logging.error('Error in path to solver file.')
@@ -272,7 +345,3 @@ if logging_level == 10:
     except ValueError as e:
         logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
         pass
-
-
-# correct answer: 107843
-# current answer: 120342
