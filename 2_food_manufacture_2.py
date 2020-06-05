@@ -295,9 +295,20 @@ for oil in oils:
     setattr(model, cname+'june_'+oil, pe.Constraint(expr=model.bool_useq_june[oil] * (low - model.useq_june[oil]) <= 0))
 
 """3. If either of VEG 1 or VEG 2 are used in a month then OIL 3 must also be used."""
-# oil1 => oil3 and oil2 => oil3
-
-
+cname1 = 'oil12_or_3_a_'
+cname2 = 'oil12_or_3_b_'
+setattr(model, cname1 + 'jan', pe.Constraint(expr=model.bool_useq_jan['3'] - model.bool_useq_jan['1'] >= 0))
+setattr(model, cname2 + 'jan', pe.Constraint(expr=model.bool_useq_jan['3'] - model.bool_useq_jan['2'] >= 0))
+setattr(model, cname1 + 'feb', pe.Constraint(expr=model.bool_useq_feb['3'] - model.bool_useq_feb['1'] >= 0))
+setattr(model, cname2 + 'feb', pe.Constraint(expr=model.bool_useq_feb['3'] - model.bool_useq_feb['2'] >= 0))
+setattr(model, cname1 + 'march', pe.Constraint(expr=model.bool_useq_march['3'] - model.bool_useq_march['1'] >= 0))
+setattr(model, cname2 + 'march', pe.Constraint(expr=model.bool_useq_march['3'] - model.bool_useq_march['2'] >= 0))
+setattr(model, cname1 + 'april', pe.Constraint(expr=model.bool_useq_april['3'] - model.bool_useq_april['1'] >= 0))
+setattr(model, cname2 + 'april', pe.Constraint(expr=model.bool_useq_april['3'] - model.bool_useq_april['2'] >= 0))
+setattr(model, cname1 + 'may', pe.Constraint(expr=model.bool_useq_may['3'] - model.bool_useq_may['1'] >= 0))
+setattr(model, cname2 + 'may', pe.Constraint(expr=model.bool_useq_may['3'] - model.bool_useq_may['2'] >= 0))
+setattr(model, cname1 + 'june', pe.Constraint(expr=model.bool_useq_june['3'] - model.bool_useq_june['1'] >= 0))
+setattr(model, cname2 + 'june', pe.Constraint(expr=model.bool_useq_june['3'] - model.bool_useq_june['2'] >= 0))
 
 
 # solve the optimization problem
