@@ -284,9 +284,15 @@ model.only_3oils_june_constr = pe.Constraint(expr=sum(model.bool_useq_june[oid] 
 
 """2. If an oil is used in a month, at least 20 tons must be used."""
 # This constraint can be achieved by a=>b type constraint;
-
-
-
+low = 20
+cname =  'atleast_20tons_'
+for oil in oils:
+    setattr(model, cname+'jan_'+oil, pe.Constraint(expr=model.bool_useq_jan[oil] * (low - model.useq_jan[oil]) <= 0))
+    setattr(model, cname+'feb_'+oil, pe.Constraint(expr=model.bool_useq_feb[oil] * (low - model.useq_feb[oil]) <= 0))
+    setattr(model, cname+'march_'+oil, pe.Constraint(expr=model.bool_useq_march[oil] * (low - model.useq_march[oil]) <= 0))
+    setattr(model, cname+'april_'+oil, pe.Constraint(expr=model.bool_useq_april[oil] * (low - model.useq_april[oil]) <= 0))
+    setattr(model, cname+'may_'+oil, pe.Constraint(expr=model.bool_useq_may[oil] * (low - model.useq_may[oil]) <= 0))
+    setattr(model, cname+'june_'+oil, pe.Constraint(expr=model.bool_useq_june[oil] * (low - model.useq_june[oil]) <= 0))
 
 """3. If either of VEG 1 or VEG 2 are used in a month then OIL 3 must also be used."""
 # oil1 => oil3 and oil2 => oil3
