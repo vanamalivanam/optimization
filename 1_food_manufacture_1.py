@@ -2,7 +2,6 @@
 from commons import *
 logging_level = 20
 
-# from pyomo.core import Piecewise
 model = pe.ConcreteModel()
 oils = ['1', '2', '3', '4', '5']
 vegoils = ['1', '2']
@@ -244,36 +243,7 @@ for oid in oils:
 
 results, log_fpath = run_solver(model)
 if logging_level == 10:
-    print_vars_debug(model, pe.Constraint, '^', '#')
-    print_vars_debug(model, pe.Var, '&', '+')
-    print(80 * '&')
-    model.display()
-    # Qtyvar = getattr(model, 'Qtyvar')
-    print('printing results')
-    print('=' * 20)
-    print(results)
-    print('=' * 20)
-    print('log file path: %s' % log_fpath)
-
-    logging.info('finished running solver...')
-    print('results.solver.message: %s' % results.solver.message)
-    # read the log file created by solver and look for text '<_scon[' to find the failed constr.
-    # this logic is specific to scip solver's log.
-    f = open(log_fpath, 'r')
-    lines = f.read()
-    pos1 = lines.find('<_scon[')
-    pos2 = lines.find(']', pos1)
-    # infeasible constraint:   [linear] <_scon[49]>: <_svar[1]>[C] (+0)
-    # -<_svar[6]>[C] (+0) -<_svar[11]>[C] (+0) == -500;
-    try:
-        # result_dict['failed_constr_num'] = int(lines[pos1 + 7: pos2])
-        print('@' * 20)
-        print(lines)
-        print('@' * 30)
-    except ValueError as e:
-        logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
-        pass
-
+    print_bad_constr(model, log_fpath)
 
 # correct objective value: 107843
 # current objective value: 120342

@@ -7,7 +7,6 @@ from inspect import stack
 from pyomo import environ as pe
 from pyomo.version.info import version_info as pyomoversion
 
-logging_level = 20
 modpath = path.abspath(__file__)
 dir_path = path.dirname(modpath)
 sys.path.append(dir_path)
@@ -198,6 +197,26 @@ def run_solver(model):
     # print(results)
     # print(80 * '*')
     return results, log_fpath
+
+
+def print_bad_constr(model, log_fpath):
+    print_vars_debug(model, pe.Constraint, '^', '#')
+    print_vars_debug(model, pe.Var, '&', '+')
+
+    # read the log file created by solver and look for text '<_scon[' to find the failed constr.
+    # this logic is specific to scip solver's log.
+    f = open(log_fpath, 'r')
+    lines = f.read()
+    pos1 = lines.find('<_scon[')
+    pos2 = lines.find(']', pos1)
+    try:
+        # result_dict['failed_constr_num'] = int(lines[pos1 + 7: pos2])
+        print('@' * 20)
+        print(lines)
+        print('@' * 30)
+    except ValueError as e:
+        logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
+        pass
 
 
 def output_to_display(m, list_varnames):
