@@ -1,45 +1,83 @@
 # problem 3
 from pyomo import environ as pe
-from pyomo.version.info import version_info as pyomoversion
-from itertools import product
-"""
-An engineering factory makes seven products (PROD 1 to PROD 7) on the
-following machines: four grinders, two vertical drills, three horizontal drills, one
-borer and one planer
-"""
-items = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
-months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun']
-pr_mon = [a + '_' + b for a, b in product(items, months)]
-ngrinders = 4
-nvertical_drill = 2
-nhorizontal_drill = 3
-nborer = 1
-nplanar = 1
 
-model = pe.ConcreteModel()
-# quantity of products that are to be produced for maximizing profits
-model.qty = pe.Var(items, months, initialize=0, within=pe.NonNegativeIntegers)
-# [Contribution_to_profit, Grinding, Vertical drilling, Horizontal drilling, Boring, Planing]
-#               c2p, gr, vd, hd, bo, pl
-manuf_costs = [[10, 0.5, 0.1, 0.2, 0.05, 0], # p1
-               [6, 0.7, 0.2, 0, 0.03, 0], # p2
-               [8, 0, 0, 0.8, 0, 0.01], # p3
-               [4, 0, 0.3, 0, 0.07, 0], # p4
-               [11, 0.3, 0, 0, 0.1, 0.05], # p5
-               [9, 0.2, 0.6, 0, 0, 0], # p6
-               [3, 0.5, 0, 0.6, 0.08, 0.05] # p7
-               ]
-"""
-#               p1,  p2,   p3,  p4,  p5,  p6, p7
-market_limits_monthwise = {
-    'jan': [500, 1000, 300, 300, 800, 200, 100],
-    'feb': [600, 500, 200, 0, 400, 300, 150],
-    'mar': [300, 600, 0, 0, 500, 400, 100],
-    'apr': [200, 300, 400, 500, 200, 0, 100],
-    'may': [0, 100, 500, 100, 1000, 300, 0],
-    'jun': [500, 500, 100, 300, 1100, 500, 60]
-}
-"""
+from commons import run_solver, output_to_file
+
+items = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
+# prods = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
+months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun']
+# working days: 24/month; working hours : 8; number of shifts : 2
+hrs = 24 * 8 * 2
+
+# total equipments before repairs : 4, 2, 3, 1, 1
+num_equip = {'jan': {'gr': 3, 'vd': 2, 'hd': 3, 'bo': 1, 'pl': 1},
+             'feb': {'gr': 4, 'vd': 2, 'hd': 1, 'bo': 1, 'pl': 1},
+             'mar': {'gr': 4, 'vd': 2, 'hd': 3, 'bo': 0, 'pl': 1},
+             'apr': {'gr': 4, 'vd': 1, 'hd': 3, 'bo': 1, 'pl': 1},
+             'may': {'gr': 3, 'vd': 1, 'hd': 3, 'bo': 1, 'pl': 1},
+             'jun': {'gr': 4, 'vd': 2, 'hd': 2, 'bo': 1, 'pl': 0}}
+
+m = pe.ConcreteModel()
+# quantity of products that are to be produced for each month
+m.qty_made = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
+m.qty_sold = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
+m.qty_stored = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
+# print(list(m.qty_sold.keys()))
+
+eqtype = ['gr', 'vd', 'hd', 'bo', 'pl']
+profit = {'p1': 10, 'p2': 6, 'p3': 8, 'p4': 4, 'p5': 11, 'p6': 9, 'p7': 3}
+
+manuf_hours = {'p1': {'gr': 0.5, 'vd': 0.1, 'hd': 0.2, 'bo': 0.05, 'pl': 0},
+               'p2': {'gr': 0.7, 'vd': 0.2, 'hd': 0, 'bo': 0.03, 'pl': 0},
+               'p3': {'gr': 0, 'vd': 0, 'hd': 0.8, 'bo': 0, 'pl': 0.01},
+               'p4': {'gr': 0, 'vd': 0.3, 'hd': 0, 'bo': 0.07, 'pl': 0},
+               'p5': {'gr': 0.3, 'vd': 0, 'hd': 0, 'bo': 0.1, 'pl': 0.05},
+               'p6': {'gr': 0.2, 'vd': 0.6, 'hd': 0, 'bo': 0, 'pl': 0},
+               'p7': {'gr': 0.5, 'vd': 0, 'hd': 0.6, 'bo': 0.08, 'pl': 0.05}}
+
+m.months = pe.Set(initialize=months)
+m.prods = pe.Set(initialize=items)
+m.equips = pe.Set(initialize=eqtype)
+
+
+def rule_objective(m):
+    # profit contribution per unit per item per month
+    # storage cost 0.5 dollar per unit.
+    expr1 = sum(m.qty_sold[(pi, mon)] * profit[pi] - m.qty_stored[(pi, mon)] * 0.5 for pi, mon in zip(items, months))
+    # expr2 = sum(m.qty_sold[(pi, mon)] * profit[pi]for pi, mon in zip(items, months))
+    print(expr1)
+    return expr1
+
+
+def rule_resource_constr(m, mon, eq):
+    # manufacturing hours of each equipment per month
+    # there will |months * equipments| constraints = 30 constraints
+    # 0.5*p1 + 0.7*p2+0*p3 + 0*p4+0.3*p5 + 0.2*p6+0.5*p7<= 3*24*16 for grinding for jan month
+    print('rule resource constraint_%s_%s'%(mon, eq))
+    expr = sum(manuf_hours[i][eq] * m.qty_made[(i, mon)] for i in items) <= num_equip[mon][eq] * hrs
+    print(expr)
+    return expr
+
+
+m.objective = pe.Objective(rule=rule_objective, sense=pe.maximize)
+m.resource_constr = pe.Constraint(m.months, m.equips, rule=rule_resource_constr)
+m.qrel_con = pe.ConstraintList()
+for i in items:
+    # total constraints = 7* 7 = 49
+    m.qrel_con.add(m.qty_stored[(i, 'jan')] == m.qty_made[(i, 'jan')] - m.qty_sold[(i, 'jan')])
+    m.qrel_con.add(m.qty_stored[(i, 'feb')] == m.qty_made[(i, 'feb')] +
+                   m.qty_stored[(i, 'jan')] - m.qty_sold[(i, 'feb')])
+    m.qrel_con.add(m.qty_stored[(i, 'mar')] == m.qty_made[(i, 'mar')] +
+                   m.qty_stored[(i, 'feb')] - m.qty_sold[(i, 'mar')])
+    m.qrel_con.add(m.qty_stored[(i, 'apr')] == m.qty_made[(i, 'apr')] +
+                   m.qty_stored[(i, 'mar')] - m.qty_sold[(i, 'apr')])
+    m.qrel_con.add(m.qty_stored[(i, 'may')] == m.qty_made[(i, 'may')] +
+                   m.qty_stored[(i, 'apr')] - m.qty_sold[(i, 'may')])
+    m.qrel_con.add(m.qty_stored[(i, 'jun')] == m.qty_made[(i, 'jun')] +
+                   m.qty_stored[(i, 'may')] - m.qty_sold[(i, 'jun')])
+    # but end of june stock is 50 units per product.
+    m.qrel_con.add(50 == m.qty_stored[(i, 'jun')])
+
 #                       jan, feb, mar,apr, may, jun
 market_limits = {'p1': [500, 600, 300, 200, 0, 500],
                  'p2': [1000, 500, 600, 300, 100, 500],
@@ -48,43 +86,18 @@ market_limits = {'p1': [500, 600, 300, 200, 0, 500],
                  'p5': [800, 400, 500, 200, 1000, 1100],
                  'p6': [200, 300, 400, 0, 300, 500],
                  'p7': [100, 150, 100, 100, 0, 60]}
-"""
-Each product yields a certain contribution to profit (defined as £/unit selling price minus cost of raw materials).
-These quantities (in £/unit) together with the unit production times (hours) required on each process are given below.
-A dash indicates that a product does not require a process.
-"""
-"""
-machines down for maintenance month wise
-January		1 Grinder
-February	2 Horizontal drills
-March 		1 Borer
-April 		1 Vertical drill
-May 		1 Grinder and 1 Vertical drill
-June 		1 Planer and 1 Horizontal drill
-"""
 
+# m.market_lim = pe.ConstraintList()
+# m.storage_lim = pe.ConstraintList()
+cname1 = 'market_lim_'
+cname2 = 'storage_lim_'
+for it in items:
+    # number of constraints = 2 *7 * 6 = 84
+    for enm, mon in enumerate(months):
+        s1 = it + '_' + mon
+        setattr(m, cname1 + s1, pe.Constraint(expr=m.qty_sold[it, mon] <= market_limits[it][enm]))
+        # max storage capacity per month per product type = 100
+        setattr(m, cname2 + s1, pe.Constraint(expr=m.qty_stored[it, mon] <= 100))
 
-"""
-storage cost 0.5 dollar per unit.
-max storage capacity per month per product type =100
-january zero stock of [p1...p7]
-but end of june stock is 50 units per product.
-"""
-
-"""
-working days: 6
-working hours : 8,
-number of shifts : 2
-N.B. It may be assumed that each month consists of only 24 working days
-"""
-
-"""
-No sequencing problems need to be considered.
-"""
-
-
-"""
-Objective:
-When and what should the factory make in order to maximise the total profit?
-Also recommend any price increases and the value of acquiring any new machines.
-"""
+results, log_fpath = run_solver(m)
+output_to_file(m, ['qty_made', 'qty_sold', 'qty_stored'])
