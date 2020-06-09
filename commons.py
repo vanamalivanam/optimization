@@ -200,7 +200,7 @@ def run_solver(model):
     return results, log_fpath
 
 
-def output_to_file(m, list_varnames):
+def output_to_display(m, list_varnames):
     from pprint import pprint
     output_dict = {}
     for vname in list_varnames:

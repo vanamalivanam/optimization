@@ -1,4 +1,5 @@
-# problem 3
+#!/usr/bin/env python
+# problem 4
 from pyomo import environ as pe
 
 from commons import run_solver, output_to_display
@@ -53,14 +54,15 @@ def rule_resource_constr(m, mon, eq):
     # manufacturing hours of each equipment per month
     # there will |months * equipments| constraints = 30 constraints
     # 0.5*p1 + 0.7*p2+0*p3 + 0*p4+0.3*p5 + 0.2*p6+0.5*p7<= 3*24*16 for grinding for jan month
-    print('rule resource constraint_%s_%s'%(mon, eq))
+    print('rule resource constraint_%s_%s' % (mon, eq))
     expr = sum(manuf_hours[i][eq] * m.qty_made[(i, mon)] for i in items) <= num_equip[mon][eq] * hrs
     print(expr)
     return expr
 
 
 m.objective = pe.Objective(rule=rule_objective, sense=pe.maximize)
-m.resource_constr = pe.Constraint(m.months, m.equips, rule=rule_resource_constr)
+# this is replaced with another version of constraint
+# m.resource_constr = pe.Constraint(m.months, m.equips, rule=rule_resource_constr)
 m.qrel_con = pe.ConstraintList()
 for i in items:
     # total constraints = 7* 7 = 49
@@ -99,5 +101,47 @@ for it in items:
         # max storage capacity per month per product type = 100
         setattr(m, cname2 + s1, pe.Constraint(expr=m.qty_stored[it, mon] <= 100))
 
+
+# copied above code from 3_factory_planning_1.py
+
+
+# total equipments before repairs : 4, 2, 3, 1, 1
+equip_qty = {'gr': 4, 'vd': 2, 'hd': 3, 'bo': 1, 'pl': 1}
+"""
+Instead of stipulating when each machine is down for maintenance in the factory
+planning problem, it is desired to find the best month for each machine to be
+down.
+Each machine must be down for maintenance in one month of the six apart
+from the grinding machines, only two of which need be down in any six months.
+"""
+
+def _qbounds(m, mon, eq):
+    if eq == 'gr':
+        return (0, 2)
+    else:
+        return (0,1)
+m.bool_eqp = pe.Var(m.months, m.equips, within=pe.NonNegativeIntegers, initialize=0, bounds=_qbounds)
+
+def rule_resource_constr2(m, mon, eq):
+    # manufacturing hours of each equipment per month;
+    expr = sum(manuf_hours[i][eq] * m.qty_made[(i, mon)] for i in items) <= (num_equip[mon][eq] - m.bool_eqp[mon, eq])*hrs
+    return expr
+
+def rule_one_eqp_down_per_month_constr(m, mon):
+    expr = sum(m.bool_eqp[mon, eq] for eq in m.equips) <= 1
+    return expr
+
+def rule_once_downtime_per_eqp_constr(m, eq):
+    if eq == 'gr':
+        expr = sum(m.bool_eqp[mon, eq] for mon in m.months) == 2
+    else:
+        expr = sum(m.bool_eqp[mon,eq] for mon in m.months) == 1
+    return expr
+
+m.one_res_down_permon_constr = pe.Constraint(m.months, rule=rule_one_eqp_down_per_month_constr)
+m.one_res_down_constr = pe.Constraint(m.equips, rule=rule_once_downtime_per_eqp_constr)
+m.resource_constr = pe.Constraint(m.months, m.equips, rule=rule_resource_constr2)
+
+
 results, log_fpath = run_solver(m)
-output_to_display(m, ['qty_made', 'qty_sold', 'qty_stored'])
+# output_to_display(m, ['qty_made', 'qty_sold', 'qty_stored'])
