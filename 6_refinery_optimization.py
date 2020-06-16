@@ -12,8 +12,8 @@ LNRG light naphtha used to produce reformed gasoline
 MNRG medium naphtha used to produce reformed gasoline
 HNRG heavy naphtha used to produce reformed gasoline
 RG reformed gasoline
-LOCGO light oil used to produce cracked oil and cracked gasoline
-HOCGO heavy oil used to produce cracked oil and cracked gasoline
+LOCGO light oil used to produce cracked gasoline and cracked oil
+HOCGO heavy oil used to produce cracked gasoline and cracked oil
 CG cracked gasoline
 CO cracked oil
 LNPMF light naphtha used to produce premium motor fuel
@@ -67,7 +67,7 @@ mod.lubeoil_ub_con = pe.Constraint(expr=mod.qty['lbo'] <= 1000)
 # The fractions into which one barrel of each type of crude splits are given
 # N.B. There is a small amount of wastage in distillation.
 co_yield = {'cra': {'ln': 0.1, 'mn': 0.2, 'hn': 0.2, 'lo': 0.12, 'ho': 0.2, 'r': 0.13},  # sums to 0.95
-                  'crb': {'ln': 0.15, 'mn': 0.25, 'hn': 0.18, 'lo': 0.08, 'ho': 0.19, 'r': 0.12}  # sums to 0.97
+            'crb': {'ln': 0.15, 'mn': 0.25, 'hn': 0.18, 'lo': 0.08, 'ho': 0.19, 'r': 0.12}  # sums to 0.97
                   }
 critems = ['ln', 'mn', 'hn', 'lo', 'ho', 'r']
 mod.cr_yield_con = pe.ConstraintList()
@@ -77,7 +77,13 @@ for it in critems:
 
 # reforming process: napthas to reformed_gasoline for three different kinds of napthas.
 # gasoline yield in barrels per barrel of naptha type low, medium and high
-naptha2_reformed_gasoline = {'ln': 0.6, 'mn': 0.52, 'hn': 0.45}
+nrg_d = {'ln': 0.6, 'mn': 0.52, 'hn': 0.45}
+mod.reformed_gas_con = pe.Constraint(expr=sum(mod.qty['%srg'%i]*nrg_d[i] for i in nrg_d) - mod.qty['rg']==0)
+
+# rgrmf + rgpmf  = rg
+mod.rg_total_con = pe.Constraint(expr=mod.qty['rgrmf']+mod.qty['rgpmf']- mod.qty['rg']==0)
+
+
 # cracking process: oils ( light, heavy) to cracked oil/cracked gasoline
 # crackingoil_yield = {'lo': {'co': 0.68, 'cg': 0.28},
 #                      'ho': {'co': 0.75, 'cg': 0.2}}
@@ -100,7 +106,6 @@ mod.sum_oil_con.add(mod.qty['lo'] - mod.qty['locgo'] - mod.qty['lojf'] - fuel_ra
 mod.sum_oil_con.add(mod.qty['ho'] - mod.qty['hocgo'] - mod.qty['hojf'] - fuel_ratio['ho'] * mod.qty['fo'] == 0)
 mod.sum_oil_con.add(mod.qty['co']  - mod.qty['cojf'] - fuel_ratio['co'] * mod.qty['fo'] == 0)
 mod.sum_oil_con.add(mod.qty['r'] - mod.qty['rlbo'] - mod.qty['rjf'] - fuel_ratio['r'] * mod.qty['fo'] == 0)
-# @@@@
 
 # Premium petrol production must be at least 40% of regular petrol
 # petrol is also called as "motor fuel"
