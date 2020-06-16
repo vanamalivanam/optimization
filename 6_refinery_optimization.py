@@ -1,101 +1,131 @@
 from commons import *
 """
-12.6 Refinery optimisation
-An oil refinery purchases two crude oils (crude 1 and crude 2). These crude oils
-are put through four processes: distillation, reforming, cracking and blending, to
-produce petrols and fuels that are sold.
+CRA crude 1
+CRB crude 2
+LN light naphtha
+MN medium naphtha
+HN heavy naphtha
+LO light oil
+HO heavy oil
+R residuum
+LNRG light naphtha used to produce reformed gasoline
+MNRG medium naphtha used to produce reformed gasoline
+HNRG heavy naphtha used to produce reformed gasoline
+RG reformed gasoline
+LOCGO light oil used to produce cracked oil and cracked gasoline
+HOCGO heavy oil used to produce cracked oil and cracked gasoline
+CG cracked gasoline
+CO cracked oil
+LNPMF light naphtha used to produce premium motor fuel
+LNRMF light naphtha used to produce regular motor fuel
+MNPMF medium naphtha used to produce premium motor fuel
+MNRMF medium naphtha used to produce regular motor fuel
+HNPMF heavy naphtha used to produce premium motor fuel
+HNRMF heavy naphtha used to produce regular motor fuel
+RGPMF reformed gasoline used to produce premium motor fuel
+RGRMF reformed gasoline used to produce regular motor fuel
+CGPMF cracked gasoline used to produce premium motor fuel
+CGRMF cracked gasoline used to produce regular motor fuel
+LOJF light oil used to produce jet fuel
+HOJF heavy oil used to produce jet fuel
+RJF residuum used to produce jet fuel
+COJF cracked oil used to produce jet fuel
+RLBO residuum used to produce lube-oil
+PMF premium motor fuel
+RMF regular motor fuel
+JF jet fuel
+FO fuel oil
+LBO lube-oil
 """
+
 mod = pe.ConcreteModel()
-profit = {'premium_petrol': 700, 'regular_petrol': 600,
-          'jet_fuel': 400, 'fuel_oil': 350, 'lubeoil': 150}
-mod.prods = pe.Set(initialize=profit.keys())
-mod.prod_qty = pe.Var(mod.prods, initialize=0, within=pe.NonNegativeReals)
-raws_lim = {'crude1': 20000, 'crude2': 30000}
-mod.raws = pe.Set(initialize=raws_lim.keys())
-def _rbounds(mod, r):
-    return (0, raws_lim[r])
-mod.crude_qty = pe.Var(mod.raws, initialize=0, bounds=_rbounds, within=pe.NonNegativeReals)
-process_limit = {'crude12': 45000, 'nap': 10000, 'cracked': 8000}
-mod.crude_proc_constr = pe.Constraint(expr=sum(mod.crude_qty[r] for r in mod.raws) <=process_limit['crude12'])
+all_items = ['cra', 'crb', 'ln', 'mn', 'hn', 'lo', 'ho', 'r', 'lnrg', 'mnrg', 'hnrg', 'rg', 'locgo', 'hocgo', 'cg',
+             'co', 'lnpmf', 'lnrmf', 'mnpmf', 'mnrmf', 'hnpmf', 'hnrmf', 'rgpmf', 'rgrmf', 'cgpmf', 'cgrmf', 'lojf',
+             'hojf', 'rjf', 'cojf', 'rlbo', 'pmf', 'rmf', 'jf', 'fo', 'lbo']
+# this is pyomo variable that needs to be solved.
+mod.qty = pe.Var(all_items, within=pe.NonNegativeReals, initialize=0)
+
+crude_lim = {'cra': 20000, 'crb': 30000}
+crudes = list(crude_lim.keys())
+
+mod.crude_lim_con = pe.ConstraintList()
+for cr in crudes:
+    mod.crude_lim_con.add(mod.qty[cr] <= crude_lim[cr])
+
+# crude oil distillation; naphta reforming; oil(heavy, light) cracking
+process_limit = {'crude12': 45000, 'nprg': 10000, 'cracking': 8000}
+nprg = ['lnrg', 'mnrg', 'hnrg']
+cracking = ['locgo', 'hocgo']
+mod.crude_proc_con = pe.Constraint(expr=sum(mod.qty[c] for c in crudes) <= process_limit['crude12'])
+mod.nap_proc_con = pe.Constraint(expr=sum(mod.qty[n] for n in nprg) <= process_limit['nprg'])
+mod.cracked_proc_con = pe.Constraint(expr=sum(mod.qty[cr] for cr in cracking) <= process_limit['cracking'])
+# lube oil constraints lower and upper bounds
+mod.lubeoil_lb_con = pe.Constraint(expr=mod.qty['lbo'] >= 500)
+mod.lubeoil_ub_con = pe.Constraint(expr=mod.qty['lbo'] <= 1000)
 
 # Distillation: crude oil to naphtas and oils
 # The fractions into which one barrel of each type of crude splits are given
 # N.B. There is a small amount of wastage in distillation.
-crudeoil_yield = {'crude1': {'lnap': 0.1, 'mnap': 0.2, 'hnap': 0.2, 'loil': 0.12, 'hoil': 0.2, 'res': 0.13},  # sums to 0.95
-                  'crude2': {'lnap': 0.15, 'mnap': 0.25, 'hnap': 0.18, 'loil': 0.08, 'hoil': 0.19, 'res': 0.12}  # sums to 0.97
+co_yield = {'cra': {'ln': 0.1, 'mn': 0.2, 'hn': 0.2, 'lo': 0.12, 'ho': 0.2, 'r': 0.13},  # sums to 0.95
+                  'crb': {'ln': 0.15, 'mn': 0.25, 'hn': 0.18, 'lo': 0.08, 'ho': 0.19, 'r': 0.12}  # sums to 0.97
                   }
-mod.napth_ids = pe.Set(initialize=['lnap', 'mnap', 'hnap'])
-mod.interprods = pe.Set(initialize=['lnap', 'mnap', 'hnap', 'loil', 'hoil', 'res'])
-mod.inter_qty = pe.Var(mod.interprods, initialize=0, within=pe.NonNegativeReals)
-def _naptha_proc_constr(mod):
-    expr = sum(mod.crude_qty[r] * crudeoil_yield[r][nid] for nid, r in mod.napth_ids * mod.raws) <= process_limit['nap']
-    return expr
-mod.naptha_proc_constr = pe.Constraint(rule=_naptha_proc_constr)
-mod.objective = pe.Objective(rule=sum(mod[t]*profit[t] for t in mod.prods), sense=pe.maximize)
-# list of constraints
-# fracs = ['lnap', 'mnap', 'hnap', 'loil', 'hoil', 'res']
-mod.procs = pe.Set(initialize=['distillation', 'reforming', 'cracking', 'blending'])
-octanes = {'lnap': 90, 'mnap': 80, 'hnap': 70, 'reformed_gas': 115, 'cracked_gas': 105,
-           'regular_petrol': 84, 'premium_petrol': 94}
+critems = ['ln', 'mn', 'hn', 'lo', 'ho', 'r']
+mod.cr_yield_con = pe.ConstraintList()
+for it in critems:
+    # this is a decomposition constraint, rather than processing limit constraint.
+    mod.cr_yield_con.add(mod.qty[it] - mod.qty['cra']*co_yield['cra'][it] - mod.qty['crb']*co_yield['crb'][it] == 0)
 
 # reforming process: napthas to reformed_gasoline for three different kinds of napthas.
 # gasoline yield in barrels per barrel of naptha type low, medium and high
-naptha2_reformed_gasoline = {'lnap': 0.6, 'mnap': 0.52, 'hnap': 0.45}
+naptha2_reformed_gasoline = {'ln': 0.6, 'mn': 0.52, 'hn': 0.45}
 # cracking process: oils ( light, heavy) to cracked oil/cracked gasoline
-crackingoil_yield = {'loil': {'cracked_oil': 0.68, 'cracked_gas': 0.28},
-                     'hoil': {'cracked_oil': 0.75, 'cracked_gas': 0.2}}
+# crackingoil_yield = {'lo': {'co': 0.68, 'cg': 0.28},
+#                      'ho': {'co': 0.75, 'cg': 0.2}}
+
+mod.cracked_oil = pe.Constraint(expr=mod.qty['locgo'] * 0.68 + mod.qty['hocgo'] * 0.75 - mod.qty['co'] == 0)
+mod.cracked_gasoline = pe.Constraint(expr=mod.qty['locgo'] * 0.28 + mod.qty['hocgo'] * 0.2 - mod.qty['cg'] == 0)
 # Residuum can be used for either producing lube-oil or blending into jet fuel and fuel oil:
-mod.lube_qty_constr = pe.Constraint(expr=mod.prods['lubeoil']-mod.inter_qty['res']*0.5==0)
-resid_yield = {'lubeoil': 0.5}
-# Blending: Cracked oil is used for blending fuel oil and jet fuel; cracked gasoline is used for blending petrol.
-# octane numbers blend linearly
+# resid_yield = {'lubeoil': 0.5}
+mod.lube_yield = pe.Constraint(expr=mod.qty['lbo'] - 0.5 * mod.qty['r'] == 0)
+
+# sum of all uses of light naptha must equate to ln
+mod.sum_nap_con = pe.ConstraintList()
+for i in ['ln', 'mn', 'hn']:
+    mod.sum_nap_con.add(mod.qty['%srg' % i] + mod.qty['%spmf' % i] + mod.qty['%srmf' % i] + - mod.qty[i] == 0)
+
+fuel_ratio = {'lo': 10 / 18.0, 'co': 4 / 18.0, 'ho': 3 / 18.0, 'r': 1 / 18.0}
+mod.sum_oil_con = pe.ConstraintList()
+# for j in ['lo', 'ho', 'co', 'r']:
+mod.sum_oil_con.add(mod.qty['lo'] - mod.qty['locgo'] - mod.qty['lojf'] - fuel_ratio['lo'] * mod.qty['fo'] == 0)
+mod.sum_oil_con.add(mod.qty['ho'] - mod.qty['hocgo'] - mod.qty['hojf'] - fuel_ratio['ho'] * mod.qty['fo'] == 0)
+mod.sum_oil_con.add(mod.qty['co']  - mod.qty['cojf'] - fuel_ratio['co'] * mod.qty['fo'] == 0)
+mod.sum_oil_con.add(mod.qty['r'] - mod.qty['rlbo'] - mod.qty['rjf'] - fuel_ratio['r'] * mod.qty['fo'] == 0)
+# @@@@
+
+# Premium petrol production must be at least 40% of regular petrol
+# petrol is also called as "motor fuel"
+mod.reg_prem_motoroil_con = pe.Constraint(expr=mod.qty['pmf'] - 0.4 * mod.qty['rmf'] >= 0)
+
+
+# Blending:
+# There are two sorts of petrol, regular and premium, obtained by blending the naphtha,
+# reformed gasoline and cracked gasoline. The only stipulations concerning them are that
+# regular must have an octane number of at least 84 and that premium must have an octane number
+# of at least 94. It is assumed that octane numbers blend linearly by volume.
+
+octanes = {'ln': 90, 'mn': 80, 'hn': 70, 'rg': 115, 'cg': 105}
+req = {'rmf': 84, 'pmf': 94}
+mod.oct_con = pe.ConstraintList()
+for i in ['rmf', 'pmf']:
+    mod.oct_con.add(sum(mod.qty['%s%s' % (r, i)] * octanes[r] for r in octanes) - req[i] * mod.qty[i] >= 0)
 
 # 12.6.4.2 Jet fuel
 # The stipulation concerning jet fuel is that its vapour pressure must not exceed
 # 1 kg cm2. It may again be assumed that vapour pressures blend linearly by volume.
-vapour_pressure = {'loil': 1.0, 'hoil': 0.6, 'cracked_oil': 1.5, 'resid': 0.05}
-# fuel_oil
-# To produce fuel oil, light oil, cracked oil, heavy oil and residuum must be blended in the ratio 10:4:3:1.
-# fuel_oil = 10*loil + 4*cracked_oil + 3*hoil + 1*res
-mod.fueloil_q = pe.Var('fueloil', within=pe.NonNegativeReals)
-fueloil_r = {'loil':10, 'cracked_oil':4, 'hoil':3, 'res':1}
-fueloil_s = sum(fueloil_r.values())
-mod.fueloil_con =  pe.Constraint(expr=sum(mod.inter_qty[r]*fueloil_r[r] for r in fueloil_r.keys())-fueloil_s*mod.fueloil_q==0)
-mod.lubeoil_prod_lb_con = pe.Constraint(expr=mod.prod_qty['lubeoil']>=500)
-mod.lubeoil_prod_ub_con = pe.Constraint(expr=mod.prod_qty['lubeoil']<=1000)
+vape = {'lo': 1.0, 'ho': 0.6, 'co': 1.5, 'r': 0.05}
+mod.jetfuel_pres_con = pe.Constraint(expr=sum(vape[i] * mod.qty['%sjf' % i] for i in vape.keys()) - mod.qty['jf'] == 0)
 
-# crude oil distillation; naphta reforming; oil(heavy, light) cracking
-process_limit = {'crude12': 45000, 'nap': 10000, 'cracked': 8000}
-lubeoil_prod = {'lbound': 500, 'ubound': 1000}  # in barrels
-# Premium petrol production must be at least 40% of regular petrol
-# petrol is also called as "motor fuel"
-
-# maximize profit
-
-"""
-12.6.4 Blending
-12.6.4.1 Petrols (motor fuel)
-There are two sorts of petrol, regular and premium, obtained by blending the naphtha,
-reformed gasoline and cracked gasoline. The only stipulations concerning them are that
-regular must have an octane number of at least 84 and that premium must have an octane number
-of at least 94. It is assumed that octane numbers blend linearly by volume.
-"""
-"""
-12.6.4.3 Fuel oil
-To produce fuel oil, light oil, cracked oil, heavy oil and residuum must be blended
-in the ratio 10:4:3:1.
-There are availability and capacity limitations on the quantities and processes
-used as follows:
-1. The daily availability of crude 1 is 20 000 barrels.
-2. The daily availability of crude 2 is 30 000 barrels.
-3. At most 45 000 barrels of crude can be distilled per day.
-4. At most 10 000 barrels of naphtha can be reformed per day.
-5. At most 8000 barrels of oil can be cracked per day.
-6. The daily production of lube oil must be between 500 and 1000 barrels.
-7. Premium motor fuel production must be at least 40% of regular motor fuel
-production.
-The profit contributions from the sale of the final products are (in pence per
-barrel) as follows:
-How should the operations of the refinery be planned in order to maximise
-total profit?
-"""
+profit = {'pmf': 700, 'rmf': 600, 'jf': 400, 'fo': 350, 'lbo': 150}
+mod.objective = pe.Objective(rule=sum(mod.qty[pr] * profit[pr] for pr in profit.keys()), sense=pe.maximize)
+results, log_fpath = run_solver(mod)
+print(results)
