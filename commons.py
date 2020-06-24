@@ -19,7 +19,6 @@ SOLVERS_PATH = sep.join(initpathlist[:-1] + ['solvers'])
 print(SOLVERS_PATH)
 exepath = path.join(SOLVERS_PATH, 'scipampl601')
 winexepath = path.join(SOLVERS_PATH, 'scipampl700.exe')
-print(exepath)
 
 """
 dir(pe.Var)
@@ -193,18 +192,21 @@ def print_bad_constr(model, log_fpath):
         pass
 
 
-def run_solver(model):
+def run_solver(model, stype='scip'):
     if osname == 'nt':
         exepath = winexepath
-    solver = pe.SolverFactory('scip6', executable=exepath, solver_io='nl')
+
+    if stype == 'scip':
+        solver = pe.SolverFactory('scip6', executable=exepath, solver_io='nl')
+    else:
+        solver = pe.SolverFactory("gurobi", solver_io="python", executable=r'C:\gurobi902\win64\bin\gurobi_cl.exe')
     if not path.isfile(exepath):
         logging.error('Error in path to solver file.')
     # if osname == 'nt':
     #     logging.error('cannot run solver in windows.')
     #     pass
     logging.info('starting solver...')
-    results = solver.solve(model, keepfiles=True, tee=True,
-                           report_timing=False, load_solutions=False)
+    results = solver.solve(model, keepfiles=True, tee=True, report_timing=False, load_solutions=False)
     print('solver message:%s' % results.solver.message)
     print('term_cond: %s' % results.solver.termination_condition.__str__())
     print('solver_status: %s' % results.solver.status.__str__())
@@ -229,6 +231,6 @@ def output_to_display(m, list_varnames):
         output_tuples = []
         for key in varval:
             # output_tuples.append((key + (varval[key].value,)))
-            output_tuples.append(([key] + [varval[key].value,]))
+            output_tuples.append(([key] + [varval[key].value, ]))
         output_dict[vname] = output_tuples
     pprint(output_dict)
