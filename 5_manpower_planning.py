@@ -24,8 +24,8 @@ recruit= {'semi':800, 'skilled':500, 'unskilled':500}
 # The retraining of semi-skilled workers to make them skilled is limited to no more than one quarter of the skilled
 # labour force at the time as some training is done on the job. Retraining a semi-skilled worker in this way costs £500
 cost_unsk_semi = 400
-num_unsk_to_semi <= 200
-num_semi_to_skl <= num_skl/4.0
+# num_unsk_to_semi <= 200
+# num_semi_to_skl <= num_skl/4.0
 cost_semi_skl = 500
 
 # Downgrading of workers to a lower skill is possible but 50% of such workers leave, although it costs the company
@@ -44,8 +44,6 @@ overmanning_cost = {'unskilled':1500, 'semi':2000, 'skilled':3000}
 # The cost of this (per employee per year) is as follows:
 # An employee on short-time working meets the production requirements of half a full-time employee.
 cost_short_term = {'unskilled':500, 'semi':400, 'skilled':400}
-
-
 
 # The company’s declared objective is to minimise redundancy. How should they operate in order to do this?
 # If their policy were to minimise costs, how much extra would this save?

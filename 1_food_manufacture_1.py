@@ -59,9 +59,9 @@ for m in months:
 # jupyter cell 8
 # volumes must equate for each month.
 # u1a + u2a + u3a + u4a + u5a = ya
-mod.mass_conv = pe.ConstraintList()
+mod.mass_conserve = pe.ConstraintList()
 for m in months:
-    mod.mass_conv.add(sum(mod.useq[m, o] for o in oils) - mod.y[m] == 0)
+    mod.mass_conserve.add(sum(mod.useq[m, o] for o in oils) - mod.y[m] == 0)
 
 def objective_expr(mod):
     # let pa, pb, pc, pd, pe, pf be the profits earned for each month.

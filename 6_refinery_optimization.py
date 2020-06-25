@@ -68,7 +68,7 @@ mod.lubeoil_ub_con = pe.Constraint(expr=mod.qty['lbo'] <= 1000)
 # N.B. There is a small amount of wastage in distillation.
 co_yield = {'cra': {'ln': 0.1, 'mn': 0.2, 'hn': 0.2, 'lo': 0.12, 'ho': 0.2, 'r': 0.13},  # sums to 0.95
             'crb': {'ln': 0.15, 'mn': 0.25, 'hn': 0.18, 'lo': 0.08, 'ho': 0.19, 'r': 0.12}  # sums to 0.97
-                  }
+            }
 critems = ['ln', 'mn', 'hn', 'lo', 'ho', 'r']
 mod.cr_yield_con = pe.ConstraintList()
 for it in critems:
@@ -82,17 +82,11 @@ mod.reformed_gas_con = pe.Constraint(expr=sum(mod.qty['%srg'%i]*nrg_d[i] for i i
 
 # rgrmf + rgpmf  = rg
 mod.rg_total_con = pe.Constraint(expr=mod.qty['rgrmf']+mod.qty['rgpmf']- mod.qty['rg']==0)
-
-
-# cracking process: oils ( light, heavy) to cracked oil/cracked gasoline
-# crackingoil_yield = {'lo': {'co': 0.68, 'cg': 0.28},
-#                      'ho': {'co': 0.75, 'cg': 0.2}}
-
 mod.cracked_oil = pe.Constraint(expr=mod.qty['locgo'] * 0.68 + mod.qty['hocgo'] * 0.75 - mod.qty['co'] == 0)
 mod.cracked_gasoline = pe.Constraint(expr=mod.qty['locgo'] * 0.28 + mod.qty['hocgo'] * 0.2 - mod.qty['cg'] == 0)
 # Residuum can be used for either producing lube-oil or blending into jet fuel and fuel oil:
 # resid_yield = {'lubeoil': 0.5}
-mod.lube_yield = pe.Constraint(expr=mod.qty['lbo'] - 0.5 * mod.qty['r'] == 0)
+mod.lube_yield = pe.Constraint(expr=mod.qty['lbo'] - 0.5 * mod.qty['rlbo'] == 0)
 
 # sum of all uses of light naptha must equate to ln
 mod.sum_nap_con = pe.ConstraintList()
@@ -109,8 +103,10 @@ mod.sum_oil_con.add(mod.qty['r'] - mod.qty['rlbo'] - mod.qty['rjf'] - fuel_ratio
 
 # Premium petrol production must be at least 40% of regular petrol
 # petrol is also called as "motor fuel"
-mod.reg_prem_motoroil_con = pe.Constraint(expr=mod.qty['pmf'] - 0.4 * mod.qty['rmf'] >= 0)
-
+mod.pmf_mass = pe.Constraint(expr=mod.qty['pmf']-mod.qty['lnpmf']-mod.qty['mnpmf']-mod.qty['hnpmf']-mod.qty['rgpmf']-mod.qty['cgpmf']==0)
+mod.rmf_mass = pe.Constraint(expr=mod.qty['rmf']-mod.qty['lnrmf']-mod.qty['mnrmf']-mod.qty['hnrmf']-mod.qty['rgrmf']-mod.qty['cgrmf']==0)
+mod.jf_mass = pe.Constraint(expr=mod.qty['jf']-mod.qty['lojf']-mod.qty['hojf']-mod.qty['cojf']-mod.qty['rjf']==0)
+mod.reg_prem_ratio = pe.Constraint(expr=mod.qty['pmf'] - 0.4 * mod.qty['rmf'] >= 0)
 
 # Blending:
 # There are two sorts of petrol, regular and premium, obtained by blending the naphtha,
@@ -128,9 +124,15 @@ for i in ['rmf', 'pmf']:
 # The stipulation concerning jet fuel is that its vapour pressure must not exceed
 # 1 kg cm2. It may again be assumed that vapour pressures blend linearly by volume.
 vape = {'lo': 1.0, 'ho': 0.6, 'co': 1.5, 'r': 0.05}
-mod.jetfuel_pres_con = pe.Constraint(expr=sum(vape[i] * mod.qty['%sjf' % i] for i in vape.keys()) - mod.qty['jf'] == 0)
+mod.jetfuel_pres_con = pe.Constraint(expr=sum(vape[i] * mod.qty['%sjf' % i] for i in vape.keys()) - mod.qty['jf']<= 0)
 
 profit = {'pmf': 700, 'rmf': 600, 'jf': 400, 'fo': 350, 'lbo': 150}
 mod.objective = pe.Objective(rule=sum(mod.qty[pr] * profit[pr] for pr in profit.keys()), sense=pe.maximize)
 results, log_fpath = run_solver(mod)
-print(results)
+# print(results)
+
+# display output
+for v in mod.component_objects(pe.Var, active=True):
+    print ("Variable component object",v)
+    for index in v:
+        print ("   ", index, v[index].value)
