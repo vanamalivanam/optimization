@@ -129,4 +129,9 @@ dmypy.json
 .pyre/
 .idea/
 *.png
-solvers/
+*.txt
+
+/solvers/scipampl501
+/solvers/scipampl601
+/solvers/scipampl601_ubuntu16
+/solvers/scipampl601_ubuntu18
