@@ -1,10 +1,12 @@
 # problem 3
-from pyomo import environ as pe
+from itertools import product
 
-from commons import output_to_display, run_solver
+import numpy as np
+import pandas as pd
+
+from commons import *
 
 items = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
-# prods = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
 months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun']
 # working days: 24/month; working hours : 8; number of shifts : 2
 hrs = 24 * 8 * 2
@@ -39,16 +41,14 @@ m.prods = pe.Set(initialize=items)
 m.equips = pe.Set(initialize=eqtype)
 
 # quantity of products that are to be produced for each month
-m.qty_made = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
-m.qty_sold = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
-m.qty_stored = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
-# print(list(m.qty_sold.keys()))
+m.made = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
+m.sold = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
+m.stored = pe.Var(items, months, initialize=0, within=pe.NonNegativeReals)
 
 
 def rule_objective(m):
-    # profit contribution per unit per item per month
-    # storage cost 0.5 dollar per unit.
-    expr1 = sum(m.qty_sold[(pi, mon)] * profit[pi] - m.qty_stored[(pi, mon)] * 0.5 for pi, mon in zip(items, months))
+    # profit contribution per unit per item per month; storage cost 0.5 dollar per unit.
+    expr1 = sum(m.sold[(pi, mon)] * profit[pi] - m.stored[(pi, mon)] * 0.5 for pi, mon in product(items, months))
     return expr1
 
 
@@ -56,41 +56,49 @@ def rule_resource_constr(m, mon, eq):
     # manufacturing hours of each equipment per month
     # there will |months * equipments| constraints = 30 constraints
     # 0.5*p1 + 0.7*p2+0*p3 + 0*p4+0.3*p5 + 0.2*p6+0.5*p7<= 3*24*16 for grinding for jan month
-    # print('rule resource constraint_%s_%s' % (mon, eq))
-    expr = sum(manuf_hours[i][eq] * m.qty_made[(i, mon)] for i in items) <= num_equip[mon][eq] * hrs
+    expr = sum(manuf_hours[i][eq] * m.made[(i, mon)] for i in items) <= num_equip[mon][eq] * hrs
     return expr
 
 
 m.objective = pe.Objective(rule=rule_objective, sense=pe.maximize)
 m.resource_constr = pe.Constraint(m.months, m.equips, rule=rule_resource_constr)
-m.qrel_con = pe.ConstraintList()
+# relative quantites constraint
+m.qrel = pe.ConstraintList()
 for i in items:
     # total constraints = 7* 7 = 49
-    m.qrel_con.add(m.qty_stored[(i, 'jan')] == m.qty_made[(i, 'jan')] - m.qty_sold[(i, 'jan')])
-    m.qrel_con.add(m.qty_stored[(i, 'feb')] == m.qty_made[(i, 'feb')] +
-                   m.qty_stored[(i, 'jan')] - m.qty_sold[(i, 'feb')])
-    m.qrel_con.add(m.qty_stored[(i, 'mar')] == m.qty_made[(i, 'mar')] +
-                   m.qty_stored[(i, 'feb')] - m.qty_sold[(i, 'mar')])
-    m.qrel_con.add(m.qty_stored[(i, 'apr')] == m.qty_made[(i, 'apr')] +
-                   m.qty_stored[(i, 'mar')] - m.qty_sold[(i, 'apr')])
-    m.qrel_con.add(m.qty_stored[(i, 'may')] == m.qty_made[(i, 'may')] +
-                   m.qty_stored[(i, 'apr')] - m.qty_sold[(i, 'may')])
-    m.qrel_con.add(m.qty_stored[(i, 'jun')] == m.qty_made[(i, 'jun')] +
-                   m.qty_stored[(i, 'may')] - m.qty_sold[(i, 'jun')])
+    m.qrel.add(m.stored[(i, 'jan')] == m.made[(i, 'jan')] - m.sold[(i, 'jan')])
+    m.qrel.add(m.stored[(i, 'feb')] == m.made[(i, 'feb')] +
+                   m.stored[(i, 'jan')] - m.sold[(i, 'feb')])
+    m.qrel.add(m.stored[(i, 'mar')] == m.made[(i, 'mar')] +
+                   m.stored[(i, 'feb')] - m.sold[(i, 'mar')])
+    m.qrel.add(m.stored[(i, 'apr')] == m.made[(i, 'apr')] +
+                   m.stored[(i, 'mar')] - m.sold[(i, 'apr')])
+    m.qrel.add(m.stored[(i, 'may')] == m.made[(i, 'may')] +
+                   m.stored[(i, 'apr')] - m.sold[(i, 'may')])
+    m.qrel.add(m.stored[(i, 'jun')] == m.made[(i, 'jun')] +
+                   m.stored[(i, 'may')] - m.sold[(i, 'jun')])
     # but end of june stock is 50 units per product.
-    m.qrel_con.add(50 == m.qty_stored[(i, 'jun')])
+    m.qrel.add(50 == m.stored[(i, 'jun')])
 
-# m.market_lim = pe.ConstraintList()
-# m.storage_lim = pe.ConstraintList()
-cname1 = 'market_lim_'
-cname2 = 'storage_lim_'
+m.market_lim = pe.ConstraintList()
+m.storage_lim = pe.ConstraintList()
 for it in items:
     # number of constraints = 2 *7 * 6 = 84
     for enm, mon in enumerate(months):
-        s1 = it + '_' + mon
-        setattr(m, cname1 + s1, pe.Constraint(expr=m.qty_sold[it, mon] <= market_limits[it][enm]))
-        # max storage capacity per month per product type = 100
-        setattr(m, cname2 + s1, pe.Constraint(expr=m.qty_stored[it, mon] <= 100))
+        m.market_lim.add(m.sold[it, mon] - market_limits[it][enm] <= 0)
+        m.storage_lim.add(m.stored[it, mon] <= 100)
 
 results, log_fpath = run_solver(m)
-output_to_display(m, ['qty_made', 'qty_sold', 'qty_stored'])
+# output_to_display(m, ['made', 'sold', 'stored'])
+# display output on console
+itkeys = {'made':'production plan', 'sold':'sales plan', 'stored':'inventory plan'}
+rows = months.copy()
+columns = items.copy()
+for varname, printval in itkeys.items():
+    df = pd.DataFrame(columns=columns, index=rows, data=0.0)
+    # store_plan = pd.DataFrame(columns=columns, index=rows, data=0.0)
+    attrval = getattr(m, varname)
+    for p, mon in attrval.keys():
+        if abs(attrval[p, mon].value) > 1e-6:
+            df.loc[mon, p] = np.round(attrval[p, mon].value, 1)
+    print('\n%s\n###########\n' % varname, df)
