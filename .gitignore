@@ -130,8 +130,4 @@ dmypy.json
 .idea/
 *.png
 *.txt
-
-/solvers/scipampl501
-/solvers/scipampl601
-/solvers/scipampl601_ubuntu16
-/solvers/scipampl601_ubuntu18
+*.exe
