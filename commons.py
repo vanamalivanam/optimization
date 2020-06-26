@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from os import name as osname, path, sep
-
+# from pyomo.opt import SolverStatus, TerminationCondition
 import logging
 import sys
 from inspect import stack
@@ -17,118 +17,8 @@ EXP = initpathlist[-2]
 
 SOLVERS_PATH = sep.join(initpathlist[:-1] + ['solvers'])
 print(SOLVERS_PATH)
-exepath = path.join(SOLVERS_PATH, 'scipampl601')
-winexepath = path.join(SOLVERS_PATH, 'scipampl700.exe')
-
-"""
-dir(pe.Var)
-a = [
-    '_ComponentDataClass',
-    '_DEFAULT_INDEX_CHECKING_ENABLED',
-    '__class__',
-    '__contains__',
-    '__deepcopy__',
-    '__delattr__',
-    '__delitem__',
-    '__dict__',
-    '__dir__',
-    '__doc__',
-    '__eq__',
-    '__format__',
-    '__ge__',
-    '__getattribute__',
-    '__getitem__',
-    '__getstate__',
-    '__gt__',
-    '__hash__',
-    '__init__',
-    '__init_subclass__',
-    '__iter__',
-    '__le__',
-    '__len__',
-    '__lt__',
-    '__module__',
-    '__ne__',
-    '__new__',
-    '__reduce__',
-    '__reduce_ex__',
-    '__repr__',
-    '__setattr__',
-    '__setitem__',
-    '__setstate__',
-    '__sizeof__',
-    '__slots__',
-    '__str__',
-    '__subclasshook__',
-    '__weakref__',
-    '_bounds_init_rule',
-    '_bounds_init_value',
-    '_constructed',
-    '_data',
-    '_dense',
-    '_domain_init_rule',
-    '_domain_init_value',
-    '_getitem_when_not_present',
-    '_implicit_subsets',
-    '_index',
-    '_initialize_members',
-    '_name',
-    '_not_constructed_error',
-    '_parent',
-    '_pprint',
-    '_processUnhashableIndex',
-    '_setitem_impl',
-    '_setitem_when_not_present',
-    '_type',
-    '_validate_index',
-    '_value_init_rule',
-    '_value_init_value',
-    'active',
-    'add',
-    'clear',
-    'clear_suffix_value',
-    'cname',
-    'construct',
-    'dim',
-    'display',
-    'doc',
-    'domain',
-    'extract_values',
-    'fix',
-    'flag_as_stale',
-    'free',
-    'get_suffix_value',
-    'get_values',
-    'getname',
-    'id_index_map',
-    'index_set',
-    'is_component_type',
-    'is_constructed',
-    'is_expression_type',
-    'is_indexed',
-    'items',
-    'iteritems',
-    'iterkeys',
-    'itervalues',
-    'keys',
-    'local_name',
-    'model',
-    'name',
-    'parent_block',
-    'parent_component',
-    'pprint',
-    'reconstruct',
-    'root_block',
-    'set_suffix_value',
-    'set_value',
-    'set_values',
-    'to_dense_data',
-    'to_string',
-    'type',
-    'unfix',
-    'valid_model_component',
-    'values']
-"""
+scippath = path.join(SOLVERS_PATH, 'scipampl601')
+winscippath = path.join(SOLVERS_PATH, 'scipampl700.exe')
 
 
 def check_expr(exprarg):
@@ -194,33 +84,65 @@ def print_bad_constr(model, log_fpath):
 
 def run_solver(model, stype='scip'):
     if osname == 'nt':
-        exepath = winexepath
-
-    if stype == 'scip':
-        solver = pe.SolverFactory('scip6', executable=exepath, solver_io='nl')
+        if stype =='scip':
+            solver = pe.SolverFactory('scip6', executable=winscippath, solver_io='nl')
+        else:
+            solver = pe.SolverFactory("gurobi", solver_io="python", executable=r'C:\gurobi902\win64\bin\gurobi_cl.exe')
     else:
-        solver = pe.SolverFactory("gurobi", solver_io="python", executable=r'C:\gurobi902\win64\bin\gurobi_cl.exe')
-    if not path.isfile(exepath):
-        logging.error('Error in path to solver file.')
-    # if osname == 'nt':
-    #     logging.error('cannot run solver in windows.')
-    #     pass
+        if stype =='scip':
+            solver = pe.SolverFactory('scip6', executable=scippath, solver_io='nl')
+        else:
+            print('gurobi not installed for linux. exiting')
+            raise ValueError
+
     logging.info('starting solver...')
     results = solver.solve(model, keepfiles=True, tee=True, report_timing=False, load_solutions=False)
     print('solver message:%s' % results.solver.message)
     print('term_cond: %s' % results.solver.termination_condition.__str__())
     print('solver_status: %s' % results.solver.status.__str__())
-    if len(results.solution) > 0:
-        model.solutions.load_from(results)
-    print('objective value: %d' % model.objective())
     log_fpath = solver._log_file
-    # print(80 * '&')
-    # m.display()
-    # print(80 * '&')
-    # print(80 * '*')
-    # print(results)
-    # print(80 * '*')
-    return results, log_fpath
+    logging.info('finished running solver...')
+    solver_status = results.solver.status.__str__()
+    solver_term_cond = results.solver.termination_condition.__str__()
+    print('solver_status:', solver_status)
+    print('solver_term_cond:', solver_term_cond)
+
+    if solver_term_cond == 'optimal':
+        if len(results.solution) > 0:
+            model.solutions.load_from(results)
+        print('objective value: %d' % model.objective())
+        # print(80 * '&')
+        # m.display()
+        # print(80 * '&')
+        # print(80 * '*')
+        # print(results)
+        # print(80 * '*')
+        return results, log_fpath
+
+    else:
+        # read the log file created by solver and look for text '<_scon[' to find the failed constr.
+        # this logic is specific to scip solver's log.
+        print('optimization failed.')
+        f = open(log_fpath, 'r')
+        lines = f.read()
+        pos1 = lines.find('<_scon[')
+        pos2 = lines.find(']', pos1)
+        try:
+            print('failed_constr_num', int(lines[pos1 + 7: pos2]))
+            print('SOLVER LOG:\n', '<>'*10, lines, '\n', '<>'*10 )
+        except ValueError as e:
+            logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
+            pass
+        return None, None
+    # result_dict['term_cond'] = results.solver.termination_condition.__str__()
+    # result_dict['solver_status'] = results.solver.status.__str__()
+    # logging.info('solvername #: %s termination_condition: %s; status: %s' %
+    #              (slvid, result_dict['term_cond'], result_dict['solver_status']))
+    # if result_dict['solver_status'] == 'ok':
+    #     print('SUCCESS WITH SOLVER: %s' % slvid)
+    #     if len(results.solution) > 0:
+    #         pebidobj.model.solutions.load_from(results)
+    #     result_dict['succ_solverid'] = slvid
 
 
 def output_to_display(m, list_varnames):
