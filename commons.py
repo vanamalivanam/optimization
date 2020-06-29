@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 from os import name as osname, path, sep
 # from pyomo.opt import SolverStatus, TerminationCondition
+# pyomo.util.timing.report_timing() to timeit the pyomo objects.
+"""
+Caution: Always use the intrinsic functions that are part of the Pyomo package.
+from pyomo.environ import * # imports, e.g., pyomo versions of exp, log, etc.)
+from math import * # overrides the pyomo versions with math versions
+expr = acos(model.x)
+"""
 import logging
 import sys
 from inspect import stack
