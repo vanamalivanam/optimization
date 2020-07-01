@@ -89,7 +89,7 @@ def print_bad_constr(model, log_fpath):
         pass
 
 
-def run_solver(model, stype='scip'):
+def run_solver(model, stype='scip', tee=False):
     if osname == 'nt':
         if stype =='scip':
             solver = pe.SolverFactory('scip6', executable=winscippath, solver_io='nl')
@@ -103,14 +103,12 @@ def run_solver(model, stype='scip'):
             raise ValueError
 
     logging.info('starting solver...')
-    results = solver.solve(model, keepfiles=True, tee=True, report_timing=False, load_solutions=False)
-    print('solver message:%s' % results.solver.message)
-    print('term_cond: %s' % results.solver.termination_condition.__str__())
-    print('solver_status: %s' % results.solver.status.__str__())
-    log_fpath = solver._log_file
+    results = solver.solve(model, keepfiles=True, tee=tee, report_timing=False, load_solutions=False)
     logging.info('finished running solver...')
+    log_fpath = solver._log_file
     solver_status = results.solver.status.__str__()
     solver_term_cond = results.solver.termination_condition.__str__()
+    print('solver message:%s' % results.solver.message)
     print('solver_status:', solver_status)
     print('solver_term_cond:', solver_term_cond)
 
@@ -118,12 +116,6 @@ def run_solver(model, stype='scip'):
         if len(results.solution) > 0:
             model.solutions.load_from(results)
         print('objective value: %d' % model.objective())
-        # print(80 * '&')
-        # m.display()
-        # print(80 * '&')
-        # print(80 * '*')
-        # print(results)
-        # print(80 * '*')
         return results, log_fpath
 
     else:

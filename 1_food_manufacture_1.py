@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import numpy as np
-import pandas as pd
+# import numpy as np
+# import pandas as pd
 
 from commons import *
 
@@ -86,6 +86,7 @@ results, log_fpath = run_solver(mod)
 if logging_level == 10:
     print_bad_constr(mod, log_fpath)
 
+"""
 # print output:
 rows = months.copy()
 columns = oils.copy()
@@ -97,3 +98,4 @@ for varname in itkeys:
         if abs(attrval[month, oil].value) > 1e-6:
             df.loc[month, oil] = np.round(attrval[month, oil].value, 1)
     print('\n%s\n###########\n' % varname, df)
+"""
