@@ -1,0 +1,7 @@
+# first install pyutilib and then pyomo
+# gurobipy==9.0.2 # this needs to be installed from setup.py
+numpy==1.19.0
+pandas==1.0.5
+PyUtilib==5.7.1
+Pyomo==5.6.6
+folium==0.11.0
