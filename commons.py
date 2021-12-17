@@ -86,6 +86,7 @@ def print_bad_constr(model, log_fpath):
         print('@' * 30)
     except ValueError as e:
         logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
+        print(e)
         pass
 
 
@@ -131,6 +132,7 @@ def run_solver(model, stype='scip', tee=False):
             print('SOLVER LOG:\n', '<>'*10, lines, '\n', '<>'*10 )
         except ValueError as e:
             logging.warning('parser failed to find questionable constraint in logfile: %s' % log_fpath)
+            print(e)
             pass
         return None, None
     # result_dict['term_cond'] = results.solver.termination_condition.__str__()
